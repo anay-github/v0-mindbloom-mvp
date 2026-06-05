@@ -30,19 +30,26 @@ import {
   Clock,
   Eye,
   ChevronRight,
-  Wind
+  Wind,
+  Play,
+  Target,
+  BarChart3
 } from 'lucide-react'
 
 // Mock Data
 const classMetrics = {
   className: '9th Grade Wellness Group',
+  totalStudents: 30,
   todayParticipation: 82,
   weeklyParticipation: 76,
   weeklyCheckInCompletion: 78,
   teamChallengeCompletion: 76,
   studentsForReview: 2,
+  checkInsPlanned: 1,
   topTeam: 'Team Blue',
-  suggestedActivity: 'Box Breathing'
+  suggestedActivity: 'Box Breathing',
+  classroomRoutinesLaunched: 4,
+  studentsCompletingThreeOrMore: 18
 }
 
 const teams = [
@@ -56,7 +63,8 @@ const initialStudentAlerts = [
   {
     id: 'student-a',
     name: 'Student A',
-    pattern: 'Lower participation plus high stress check-ins',
+    engagementPattern: 'Participation dropped',
+    wellnessPattern: 'High stress check-ins',
     supportLevel: 'elevated' as const,
     suggestedAction: 'Supportive check-in',
     details: {
@@ -69,12 +77,14 @@ const initialStudentAlerts = [
       },
       requestedCheckIn: true
     },
-    checkInPlanned: false
+    checkInPlanned: false,
+    flagReason: 'Student A was flagged because participation dropped from 5 activities last week to 1 this week, their streak ended, and their weekly check-in showed high stress and poor sleep. MindBloom recommends a supportive counselor check-in.'
   },
   {
     id: 'student-b',
     name: 'Student B',
-    pattern: 'Missed weekly check-in plus low energy',
+    engagementPattern: 'Missed weekly check-in',
+    wellnessPattern: 'Low energy',
     supportLevel: 'watch' as const,
     suggestedAction: 'Monitor',
     details: {
@@ -84,12 +94,14 @@ const initialStudentAlerts = [
       weeklyCheckIn: null,
       requestedCheckIn: false
     },
-    checkInPlanned: false
+    checkInPlanned: false,
+    flagReason: 'Student B missed their weekly check-in and showed low energy in recent activities. Continue monitoring for changes.'
   },
   {
     id: 'student-c',
     name: 'Student C',
-    pattern: 'Stable engagement pattern',
+    engagementPattern: 'Stable participation',
+    wellnessPattern: 'Stable check-ins',
     supportLevel: 'stable' as const,
     suggestedAction: 'No action',
     details: {
@@ -102,12 +114,14 @@ const initialStudentAlerts = [
       },
       requestedCheckIn: false
     },
-    checkInPlanned: false
+    checkInPlanned: false,
+    flagReason: ''
   },
   {
     id: 'student-d',
     name: 'Student D',
-    pattern: 'Sudden streak drop plus low connection',
+    engagementPattern: 'Streak ended',
+    wellnessPattern: 'Low connection',
     supportLevel: 'elevated' as const,
     suggestedAction: 'Supportive check-in',
     details: {
@@ -121,43 +135,65 @@ const initialStudentAlerts = [
       },
       requestedCheckIn: false
     },
-    checkInPlanned: false
+    checkInPlanned: false,
+    flagReason: 'Student D was flagged because their streak ended, participation dropped, and their weekly check-in indicated they feel not connected to others. MindBloom recommends a supportive counselor check-in.'
   }
 ]
 
 const patternRules = [
   { trigger: 'One missed day', result: 'No alert' },
-  { trigger: 'Three missed activities', result: 'Gentle reminder' },
+  { trigger: 'Three missed activities', result: 'Supportive reminder' },
   { trigger: 'Three missed activities plus high stress', result: 'Counselor review' },
-  { trigger: 'Sudden streak drop plus low connection', result: 'Counselor review' },
-  { trigger: 'Stable participation', result: 'No action' },
-  { trigger: 'Student requests check-in', result: 'Counselor review' }
+  { trigger: 'Sudden streak drop plus poor sleep', result: 'Counselor review' },
+  { trigger: 'Student requests check-in', result: 'Counselor review' },
+  { trigger: 'Stable participation', result: 'No action' }
+]
+
+const classroomRoutines = [
+  { id: 'morning', name: 'Morning Reset', activity: 'Body Scan', description: 'Help students settle in at the start of class' },
+  { id: 'pretest', name: 'Pre-Test Calm', activity: 'Box Breathing', description: 'Help students manage stress before assessments' },
+  { id: 'afterlunch', name: 'After-Lunch Refocus', activity: 'Look for Green', description: 'Help students refocus after lunch break' },
+  { id: 'endofday', name: 'End-of-Day Wind Down', activity: 'Sensory Countdown', description: 'Help students transition out of school mode' }
+]
+
+const classroomChallenges = [
+  { id: '100activities', name: 'Complete 100 wellness activities this week', progress: 76 },
+  { id: '80participation', name: 'Reach 80% class participation', progress: 82 },
+  { id: '3skills', name: 'Try 3 different skills this week', progress: 100 },
+  { id: '5daystreak', name: 'Complete a 5-day classroom streak', progress: 80 }
 ]
 
 const privacyCommitments = [
-  { icon: '🚫', text: 'No diagnosis' },
-  { icon: '🔒', text: 'No invasive data collection' },
-  { icon: '📱', text: 'No social media tracking' },
-  { icon: '📍', text: 'No location tracking' },
-  { icon: '💬', text: 'No private message scanning' },
-  { icon: '📷', text: 'No camera or microphone monitoring' },
-  { icon: '🏥', text: 'No medical records' },
-  { icon: '👩‍🏫', text: 'Teachers see aggregate trends only' },
-  { icon: '👨‍⚕️', text: 'Counselors review individual support alerts' },
-  { icon: '🏆', text: 'Rankings based on participation only' },
-  { icon: '👥', text: 'Human adults make support decisions' }
+  { icon: '🚫', title: 'No diagnosis', text: 'MindBloom does not diagnose students' },
+  { icon: '🔒', title: 'No invasive data', text: 'No social media tracking' },
+  { icon: '📍', title: 'No location', text: 'No location tracking' },
+  { icon: '💬', title: 'No messages', text: 'No private message scanning' },
+  { icon: '📷', title: 'No camera', text: 'No camera or microphone monitoring' },
+  { icon: '🏥', title: 'No medical records', text: 'No medical record access' },
+  { icon: '👩‍🏫', title: 'Teachers: Aggregate only', text: 'Teachers see class-level trends' },
+  { icon: '👨‍⚕️', title: 'Counselors: Individual alerts', text: 'Counselors review support alerts' },
+  { icon: '🏆', title: 'Rankings: Participation only', text: 'Based on engagement, not wellness scores' },
+  { icon: '👥', title: 'Human decisions', text: 'Adults make all support decisions' }
 ]
 
 export default function TeacherCounselorPortal() {
   const [activeTab, setActiveTab] = useState('overview')
   const [studentAlerts, setStudentAlerts] = useState(initialStudentAlerts)
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null)
-  const [classResetStarted, setClassResetStarted] = useState(false)
+  const [classResetActive, setClassResetActive] = useState<string | null>(null)
+  const [activeChallenge, setActiveChallenge] = useState<string | null>('100activities')
 
-  const handleLaunchClassReset = () => {
-    setClassResetStarted(true)
-    toast.success('Class reset started: Box Breathing', {
+  const handleLaunchClassRoutine = (routineId: string, activityName: string) => {
+    setClassResetActive(routineId)
+    toast.success(`Class routine started: ${activityName}`, {
       description: 'Students will be guided through the activity.'
+    })
+  }
+
+  const handleSelectChallenge = (challengeId: string) => {
+    setActiveChallenge(challengeId)
+    toast.success('Challenge selected!', {
+      description: 'This is now your active class challenge.'
     })
   }
 
@@ -167,8 +203,8 @@ export default function TeacherCounselorPortal() {
         alert.id === studentId ? { ...alert, checkInPlanned: true } : alert
       )
     )
-    toast.success('Check-in planned', {
-      description: `Support check-in scheduled for ${studentId.replace('-', ' ').toUpperCase()}.`
+    toast.success('Support step recorded', {
+      description: 'A trusted adult will follow up.'
     })
   }
 
@@ -184,6 +220,7 @@ export default function TeacherCounselorPortal() {
   }
 
   const selectedStudentData = studentAlerts.find(s => s.id === selectedStudent)
+  const elevatedStudents = studentAlerts.filter(s => s.supportLevel === 'elevated')
 
   return (
     <div className="min-h-screen bg-background">
@@ -211,6 +248,13 @@ export default function TeacherCounselorPortal() {
           </div>
         </div>
       </header>
+
+      {/* Safety Message Banner */}
+      <div className="bg-primary/5 border-b border-primary/10 py-2 px-4">
+        <p className="text-center text-sm text-primary italic">
+          MindBloom gamifies participation, not mental health.
+        </p>
+      </div>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
@@ -242,11 +286,12 @@ export default function TeacherCounselorPortal() {
           <TabsContent value="overview" className="space-y-6">
             <h2 className="text-2xl font-semibold">Portal Overview</h2>
 
+            {/* Key Metrics */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {"Today's Participation"}
+                    Daily Participation
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -257,7 +302,7 @@ export default function TeacherCounselorPortal() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Weekly Participation
+                    Weekly Practice Goal
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -268,18 +313,18 @@ export default function TeacherCounselorPortal() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Weekly Check-In
+                    Classroom Routines Launched
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{classMetrics.weeklyCheckInCompletion}%</div>
+                  <div className="text-3xl font-bold">{classMetrics.classroomRoutinesLaunched}</div>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Team Challenge
+                    Team Challenge Progress
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -287,6 +332,63 @@ export default function TeacherCounselorPortal() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Success Metrics */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Success Metrics
+                </CardTitle>
+                <CardDescription>Skill practice and early support metrics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Skill Practice</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Daily participation</span>
+                        <span className="font-medium">{classMetrics.todayParticipation}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Weekly practice goal</span>
+                        <span className="font-medium">{classMetrics.weeklyParticipation}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Classroom routines launched</span>
+                        <span className="font-medium">{classMetrics.classroomRoutinesLaunched}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Team challenge progress</span>
+                        <span className="font-medium">{classMetrics.teamChallengeCompletion}%</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Students completing 3+ activities</span>
+                        <span className="font-medium">{classMetrics.studentsCompletingThreeOrMore} of {classMetrics.totalStudents}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Early Support</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Students recommended for review</span>
+                        <span className="font-medium text-amber-600">{classMetrics.studentsForReview}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Supportive check-ins planned</span>
+                        <span className="font-medium text-primary">{classMetrics.checkInsPlanned}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Weekly check-ins completed</span>
+                        <span className="font-medium">{classMetrics.weeklyCheckInCompletion}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Card className="border-amber-200 dark:border-amber-800/50">
@@ -298,7 +400,7 @@ export default function TeacherCounselorPortal() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-amber-600">{classMetrics.studentsForReview}</div>
-                  <p className="text-sm text-muted-foreground">Recommended for support check-in</p>
+                  <p className="text-sm text-muted-foreground">Recommended for supportive check-in</p>
                 </CardContent>
               </Card>
 
@@ -328,13 +430,36 @@ export default function TeacherCounselorPortal() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Teacher Insights */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Teacher Insights</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <p className="text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    Class participation is strong today.
+                  </p>
+                  <p className="text-sm p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                    Class stress check-ins are slightly elevated.
+                  </p>
+                  <p className="text-sm p-2 bg-primary/10 rounded-lg">
+                    Recommended class activity: Box Breathing.
+                  </p>
+                  <p className="text-sm p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    Team Blue is leading participation.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* TEACHER TAB */}
           <TabsContent value="teacher" className="space-y-6">
             <div>
               <h2 className="text-2xl font-semibold">Teacher View</h2>
-              <p className="text-muted-foreground">Aggregate class and team data</p>
+              <p className="text-muted-foreground">Aggregate class data and classroom tools</p>
             </div>
 
             {/* Metrics */}
@@ -358,6 +483,91 @@ export default function TeacherCounselorPortal() {
                 </Card>
               ))}
             </div>
+
+            {/* Launch Class Routine */}
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Play className="h-5 w-5 text-primary" />
+                  Launch Class Routine
+                </CardTitle>
+                <CardDescription>Start a guided wellness activity for your class</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {classroomRoutines.map(routine => (
+                    <div 
+                      key={routine.id}
+                      className={`p-4 rounded-lg border transition-all ${
+                        classResetActive === routine.id 
+                          ? 'border-primary bg-primary/10' 
+                          : 'border-border bg-card hover:border-primary/50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-medium">{routine.name}</h4>
+                          <p className="text-sm text-muted-foreground">{routine.description}</p>
+                          <p className="text-xs text-primary mt-1">Activity: {routine.activity}</p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant={classResetActive === routine.id ? 'secondary' : 'default'}
+                          onClick={() => handleLaunchClassRoutine(routine.id, routine.activity)}
+                          disabled={classResetActive === routine.id}
+                        >
+                          {classResetActive === routine.id ? 'Active' : 'Launch'}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {classResetActive && (
+                  <div className="mt-4 p-4 bg-card rounded-lg border border-primary/30">
+                    <p className="text-sm text-primary font-medium">
+                      Class routine active: {classroomRoutines.find(r => r.id === classResetActive)?.activity}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Students are being guided through the activity.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Classroom Challenge Builder */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  Classroom Challenge Builder
+                </CardTitle>
+                <CardDescription>Select a challenge to motivate your class</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {classroomChallenges.map(challenge => (
+                  <div 
+                    key={challenge.id}
+                    className={`p-4 rounded-lg border transition-all cursor-pointer ${
+                      activeChallenge === challenge.id 
+                        ? 'border-primary bg-primary/10' 
+                        : 'border-border bg-muted/30 hover:border-primary/50'
+                    }`}
+                    onClick={() => handleSelectChallenge(challenge.id)}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">{challenge.name}</h4>
+                      {activeChallenge === challenge.id && (
+                        <Badge variant="secondary">Active</Badge>
+                      )}
+                    </div>
+                    <Progress value={challenge.progress} className="h-2" />
+                    <p className="text-xs text-muted-foreground mt-1">{challenge.progress}% complete</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
 
             {/* Team Table */}
             <Card>
@@ -394,220 +604,190 @@ export default function TeacherCounselorPortal() {
               </CardContent>
             </Card>
 
-            {/* Suggested Class Activity */}
-            <Card className="border-primary/30 bg-primary/5">
+            {/* Family Practice Extension */}
+            <Card className="border-muted">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wind className="h-5 w-5 text-primary" />
-                  Suggested Class Activity
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  🏠 Family Practice Extension
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-xl font-semibold">{classMetrics.suggestedActivity}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Class stress check-ins are slightly elevated.
-                  </p>
-                </div>
-                <Button
-                  onClick={handleLaunchClassReset}
-                  disabled={classResetStarted}
-                  className="w-full md:w-auto"
-                >
-                  {classResetStarted ? (
-                    <>
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Class Reset Started
-                    </>
-                  ) : (
-                    <>
-                      Launch Class Reset
-                      <ChevronRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Students can optionally continue short activities at home. Future versions can send 
+                  parents simple encouragement summaries, such as: &quot;Ask your student to show you one 
+                  calming skill they practiced this week.&quot;
+                </p>
               </CardContent>
             </Card>
-
-            {/* Privacy Note */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
-              <Eye className="h-4 w-4 flex-shrink-0" />
-              <p>Teachers see class and team trends only.</p>
-            </div>
           </TabsContent>
 
           {/* COUNSELOR TAB */}
           <TabsContent value="counselor" className="space-y-6">
             <div>
               <h2 className="text-2xl font-semibold">Counselor View</h2>
-              <p className="text-muted-foreground">Individual student support alerts</p>
+              <p className="text-muted-foreground">Individual support alerts and prioritization</p>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Student Alerts Table */}
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle>Student Support Alerts</CardTitle>
-                  <CardDescription>Click a student to view details</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Pattern</TableHead>
-                        <TableHead>Support Level</TableHead>
-                        <TableHead>Suggested Action</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {studentAlerts.map(alert => (
-                        <TableRow
-                          key={alert.id}
-                          className={`cursor-pointer hover:bg-muted/50 ${selectedStudent === alert.id ? 'bg-muted' : ''}`}
-                          onClick={() => setSelectedStudent(alert.id)}
-                        >
-                          <TableCell className="font-medium">{alert.name}</TableCell>
-                          <TableCell className="max-w-[200px] truncate">{alert.pattern}</TableCell>
-                          <TableCell>
-                            <Badge className={getSupportLevelColor(alert.supportLevel)}>
-                              {alert.supportLevel.charAt(0).toUpperCase() + alert.supportLevel.slice(1)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{alert.suggestedAction}</TableCell>
-                          <TableCell>
-                            {alert.checkInPlanned ? (
-                              <Badge variant="outline" className="text-green-600 border-green-300">
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Planned
-                              </Badge>
-                            ) : alert.supportLevel === 'elevated' ? (
-                              <Badge variant="outline" className="text-amber-600 border-amber-300">
-                                <Clock className="h-3 w-3 mr-1" />
-                                Pending
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              {/* Student Detail Panel */}
-              {selectedStudentData && (
-                <Card className="lg:col-span-2 border-primary/30">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2">
-                        {selectedStudentData.name} Details
-                        <Badge className={getSupportLevelColor(selectedStudentData.supportLevel)}>
-                          {selectedStudentData.supportLevel}
-                        </Badge>
-                      </CardTitle>
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(null)}>
-                        Close
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-sm text-muted-foreground">Activity Changes</h4>
-                        <p>
-                          Participation dropped from{' '}
-                          <span className="font-semibold">{selectedStudentData.details.lastWeekActivities} activities</span>{' '}
-                          last week to{' '}
-                          <span className="font-semibold">{selectedStudentData.details.thisWeekActivities} this week</span>
-                        </p>
-                        {selectedStudentData.details.streakEnded && (
-                          <p className="text-amber-600">Streak ended</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-sm text-muted-foreground">Weekly Check-In</h4>
-                        {selectedStudentData.details.weeklyCheckIn ? (
-                          <div className="space-y-1">
-                            <p>Stress: <span className="font-semibold">{selectedStudentData.details.weeklyCheckIn.stress}</span></p>
-                            <p>Sleep: <span className="font-semibold">{selectedStudentData.details.weeklyCheckIn.sleep}</span></p>
-                            {selectedStudentData.details.weeklyCheckIn.connection && (
-                              <p>Connection: <span className="font-semibold">{selectedStudentData.details.weeklyCheckIn.connection}</span></p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-amber-600">Weekly check-in not completed</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {selectedStudentData.details.requestedCheckIn && (
-                      <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 text-amber-800 dark:text-amber-200">
-                        <p className="font-medium">Student requested or may benefit from a supportive check-in</p>
-                      </div>
-                    )}
-
-                    <div className="bg-primary/5 rounded-lg p-4">
-                      <h4 className="font-medium mb-2">Suggested Action</h4>
-                      <p>{selectedStudentData.suggestedAction}</p>
-                    </div>
-
-                    {selectedStudentData.supportLevel === 'elevated' && !selectedStudentData.checkInPlanned && (
-                      <Button onClick={() => handleMarkCheckInPlanned(selectedStudentData.id)}>
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Mark Check-In Planned
-                      </Button>
-                    )}
-
-                    {selectedStudentData.checkInPlanned && (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="font-medium">Check-in planned</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* AI PATTERN REVIEW TAB */}
-          <TabsContent value="patterns" className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-semibold">How MindBloom Analyzes Patterns</h2>
-              <p className="text-muted-foreground">Understanding engagement pattern detection</p>
-            </div>
-
-            {/* Flow Explanation */}
-            <Card>
+            {/* Counselor Insights */}
+            <Card className="border-amber-200 dark:border-amber-800/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5 text-primary" />
-                  Pattern Analysis Flow
+                  <Eye className="h-5 w-5 text-amber-500" />
+                  Counselor Insights
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4 md:grid-cols-5">
+                <div className="space-y-2">
+                  <p className="text-sm p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                    {elevatedStudents.length} students may need review.
+                  </p>
+                  {elevatedStudents.map(student => (
+                    <p key={student.id} className="text-sm p-2 bg-muted/50 rounded-lg">
+                      {student.name} shows {student.engagementPattern.toLowerCase()} plus {student.wellnessPattern.toLowerCase()}.
+                    </p>
+                  ))}
+                  <p className="text-sm p-2 bg-primary/10 rounded-lg">
+                    Suggested next step: supportive check-in.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Early Support Prioritization */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Early Support Prioritization</CardTitle>
+                <CardDescription>Students who may benefit from a supportive check-in</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Engagement Pattern</TableHead>
+                      <TableHead>Wellness Pattern</TableHead>
+                      <TableHead>Support Level</TableHead>
+                      <TableHead>Suggested Next Step</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {studentAlerts.map(student => (
+                      <TableRow 
+                        key={student.id}
+                        className={`cursor-pointer ${selectedStudent === student.id ? 'bg-muted/50' : ''}`}
+                        onClick={() => setSelectedStudent(student.id === selectedStudent ? null : student.id)}
+                      >
+                        <TableCell className="font-medium">{student.name}</TableCell>
+                        <TableCell>{student.engagementPattern}</TableCell>
+                        <TableCell>{student.wellnessPattern}</TableCell>
+                        <TableCell>
+                          <Badge className={getSupportLevelColor(student.supportLevel)}>
+                            {student.supportLevel === 'elevated' ? 'Elevated' : 
+                             student.supportLevel === 'watch' ? 'Watch' : 'Stable'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{student.suggestedAction}</TableCell>
+                        <TableCell>
+                          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${selectedStudent === student.id ? 'rotate-90' : ''}`} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Selected Student Panel */}
+            {selectedStudentData && selectedStudentData.supportLevel !== 'stable' && (
+              <Card className="border-amber-200 dark:border-amber-800/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    Why {selectedStudentData.name} was flagged
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {selectedStudentData.flagReason}
+                  </p>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="text-lg font-bold">{selectedStudentData.details.lastWeekActivities}</p>
+                      <p className="text-xs text-muted-foreground">Last week activities</p>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="text-lg font-bold">{selectedStudentData.details.thisWeekActivities}</p>
+                      <p className="text-xs text-muted-foreground">This week activities</p>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="text-lg font-bold">{selectedStudentData.details.streakEnded ? 'Yes' : 'No'}</p>
+                      <p className="text-xs text-muted-foreground">Streak ended</p>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="text-lg font-bold">{selectedStudentData.details.requestedCheckIn ? 'Yes' : 'No'}</p>
+                      <p className="text-xs text-muted-foreground">Requested check-in</p>
+                    </div>
+                  </div>
+                  
+                  {selectedStudentData.checkInPlanned ? (
+                    <div className="p-4 bg-primary/10 rounded-lg flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-primary" />
+                      <span className="text-sm text-primary font-medium">Check-in planned</span>
+                    </div>
+                  ) : (
+                    <Button 
+                      className="w-full" 
+                      onClick={() => handleMarkCheckInPlanned(selectedStudentData.id)}
+                    >
+                      Mark Check-In Planned
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Action Pathway */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Action Pathway</CardTitle>
+                <CardDescription>How MindBloom supports early intervention</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                   {[
-                    { step: 1, title: 'Activity Tracking', desc: 'Student completes activities and check-ins' },
-                    { step: 2, title: 'Engagement Analysis', desc: 'MindBloom tracks engagement changes' },
-                    { step: 3, title: 'Context Addition', desc: 'Weekly check-in adds context' },
-                    { step: 4, title: 'Pattern Flagging', desc: 'Repeated concern patterns are flagged' },
-                    { step: 5, title: 'Human Review', desc: 'Counselor reviews the alert' }
+                    { step: '1', label: 'Pattern detected' },
+                    { step: '2', label: 'Counselor reviews alert' },
+                    { step: '3', label: 'Supportive check-in planned' },
+                    { step: '4', label: 'Student receives support' },
+                    { step: '5', label: 'Pattern monitored over time' }
                   ].map((item, i) => (
-                    <div key={i} className="flex flex-col items-center text-center">
-                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold mb-2">
+                    <div key={item.step} className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
                         {item.step}
                       </div>
-                      <h4 className="font-medium text-sm">{item.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
+                      <span className="text-sm">{item.label}</span>
+                      {i < 4 && <ChevronRight className="h-4 w-4 text-muted-foreground hidden md:block" />}
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* AI PATTERNS TAB */}
+          <TabsContent value="patterns" className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-semibold">Clear AI Pattern Analysis</h2>
+              <p className="text-muted-foreground">Understanding how MindBloom identifies support needs</p>
+            </div>
+
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="py-6">
+                <p className="text-center text-foreground">
+                  MindBloom does not diagnose students. It looks for repeated changes in engagement 
+                  and wellness patterns, then explains why a student may need support.
+                </p>
               </CardContent>
             </Card>
 
@@ -615,31 +795,25 @@ export default function TeacherCounselorPortal() {
             <Card>
               <CardHeader>
                 <CardTitle>Pattern Rules</CardTitle>
-                <CardDescription>How different engagement patterns are interpreted</CardDescription>
+                <CardDescription>How different signals trigger different responses</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Engagement Pattern</TableHead>
-                      <TableHead>System Response</TableHead>
+                      <TableHead>When this happens...</TableHead>
+                      <TableHead>MindBloom responds with...</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {patternRules.map((rule, i) => (
                       <TableRow key={i}>
-                        <TableCell className="font-medium">{rule.trigger}</TableCell>
+                        <TableCell>{rule.trigger}</TableCell>
                         <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              rule.result === 'No alert' || rule.result === 'No action'
-                                ? 'text-green-600 border-green-300'
-                                : rule.result === 'Gentle reminder'
-                                ? 'text-blue-600 border-blue-300'
-                                : 'text-amber-600 border-amber-300'
-                            }
-                          >
+                          <Badge variant={
+                            rule.result === 'No alert' || rule.result === 'No action' ? 'secondary' :
+                            rule.result === 'Supportive reminder' ? 'outline' : 'default'
+                          }>
                             {rule.result}
                           </Badge>
                         </TableCell>
@@ -650,53 +824,62 @@ export default function TeacherCounselorPortal() {
               </CardContent>
             </Card>
 
-            {/* Example */}
-            <Card className="border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-900/10">
+            {/* Sample AI Explanation */}
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  Example: Student A Alert
-                </CardTitle>
+                <CardTitle>Sample AI Explanation</CardTitle>
+                <CardDescription>How MindBloom explains why a student was flagged</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">
-                  Student A was flagged because participation dropped, their streak ended, and their weekly
-                  check-in showed high stress and poor sleep. A supportive check-in is recommended.
-                </p>
+                <div className="bg-muted/50 rounded-lg p-4">
+                  <p className="text-sm italic">
+                    &quot;Because Student A&apos;s participation dropped, streak ended, and weekly check-in showed 
+                    high stress and poor sleep, MindBloom recommends a supportive check-in.&quot;
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Terminology */}
+            {/* What MindBloom Looks At */}
             <Card>
               <CardHeader>
-                <CardTitle>Our Approach to Language</CardTitle>
-                <CardDescription>We use supportive, non-clinical terminology</CardDescription>
+                <CardTitle>What MindBloom Analyzes</CardTitle>
+                <CardDescription>Signals combined to identify wellness patterns</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-medium text-green-600 mb-3">We Use</h4>
-                    <ul className="space-y-2">
-                      {['Support level', 'Engagement pattern', 'Wellness pattern', 'Supportive check-in', 'Counselor review'].map((term, i) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          {term}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-red-600 mb-3">We Never Use</h4>
-                    <ul className="space-y-2 text-muted-foreground">
-                      {['Diagnosis', 'Risk score', 'Mental health score', 'Lazy', 'Disorder'].map((term, i) => (
-                        <li key={i} className="flex items-center gap-2 line-through">
-                          <span className="text-red-400">✕</span>
-                          {term}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {[
+                    'Daily activity completion',
+                    'Check-in mood responses',
+                    'Check-in stress levels',
+                    'Check-in energy levels',
+                    'Streak changes',
+                    'Weekly wellness quiz answers',
+                    'Support request button',
+                    'Post-activity reflection',
+                    'Team contribution',
+                    'BloomBird growth'
+                  ].map((signal, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                      <span className="text-sm">{signal}</span>
+                    </div>
+                  ))}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Clear Insights Promise */}
+            <Card className="border-primary/30">
+              <CardHeader>
+                <CardTitle>Clear Insights, Not Just Data</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  MindBloom does not just show raw data. It provides clear, helpful insights and 
+                  recommends a next step, such as a supportive counselor check-in, class reset 
+                  activity, or continued monitoring.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -704,72 +887,102 @@ export default function TeacherCounselorPortal() {
           {/* PRIVACY TAB */}
           <TabsContent value="privacy" className="space-y-6">
             <div>
-              <h2 className="text-2xl font-semibold">Privacy-First Design</h2>
-              <p className="text-muted-foreground">Our commitments to student privacy and safety</p>
+              <h2 className="text-2xl font-semibold">Privacy, Fairness, Usability, Actionability</h2>
+              <p className="text-muted-foreground">How MindBloom protects students while providing support</p>
             </div>
 
+            {/* Four Pillars */}
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-2xl mb-2">
+                    🔒
+                  </div>
+                  <CardTitle>Privacy &amp; Trust</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    MindBloom avoids social media tracking, location tracking, private message scanning, 
+                    camera monitoring, microphone monitoring, and medical record access.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-2xl mb-2">
+                    ⚖️
+                  </div>
+                  <CardTitle>Fairness</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    MindBloom uses simple participation and check-in patterns that can work across 
+                    different student groups. Support alerts are reviewed by humans, not decided automatically.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-2xl mb-2">
+                    ✨
+                  </div>
+                  <CardTitle>Usability</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Students use short activities, simple check-ins, points, streaks, teams, and 
+                    BloomBird progress to make daily wellness practice easy and engaging.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-2xl mb-2">
+                    🎯
+                  </div>
+                  <CardTitle>Actionability</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    MindBloom does not just show data. It recommends a next step, such as a supportive 
+                    counselor check-in, class reset activity, or continued monitoring.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Privacy Commitments */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Privacy Commitments</CardTitle>
+                <CardDescription>What MindBloom does and does not do</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {privacyCommitments.map((commitment, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                      <span className="text-xl">{commitment.icon}</span>
+                      <div>
+                        <p className="font-medium text-sm">{commitment.title}</p>
+                        <p className="text-xs text-muted-foreground">{commitment.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Safety Message */}
             <Card className="border-primary/30 bg-primary/5">
-              <CardContent className="pt-6">
-                <p className="text-lg font-medium text-center">
-                  &ldquo;MindBloom uses engagement patterns, not invasive surveillance.&rdquo;
+              <CardContent className="py-6">
+                <p className="text-center text-lg font-medium text-foreground">
+                  MindBloom gamifies participation, not mental health.
                 </p>
               </CardContent>
             </Card>
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {privacyCommitments.map((commitment, i) => (
-                <Card key={i}>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">{commitment.icon}</span>
-                      <p className="font-medium">{commitment.text}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
-                  Data Access Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Data Access</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell className="font-medium">Teachers</TableCell>
-                      <TableCell>Aggregate class and team trends only</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium">Counselors</TableCell>
-                      <TableCell>Individual student support alerts when patterns indicate need</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-medium">Students</TableCell>
-                      <TableCell>Their own data, progress, and team participation</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            <div className="bg-muted rounded-lg p-6 text-center">
-              <Shield className="h-12 w-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2">Human-Centered Support</h3>
-              <p className="text-muted-foreground max-w-2xl mx-auto">
-                MindBloom identifies patterns and provides information to trusted adults.
-                All support decisions are made by humans who know and care about students.
-              </p>
-            </div>
           </TabsContent>
         </Tabs>
       </main>

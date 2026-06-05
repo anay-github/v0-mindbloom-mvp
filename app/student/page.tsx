@@ -25,7 +25,9 @@ import {
   Sparkles,
   CheckCircle2,
   ChevronRight,
-  X
+  X,
+  Play,
+  Clock
 } from 'lucide-react'
 
 // Types
@@ -42,7 +44,9 @@ const studentProfile = {
   buddy: 'Student B',
   startingPoints: 240,
   startingStreak: 4,
+  dailyGoal: 1,
   weeklyGoal: 5,
+  completedToday: 0,
   completedThisWeek: 3
 }
 
@@ -54,13 +58,63 @@ const teams = [
   { name: 'Team Purple', participation: 61, activities: 31, goalProgress: 61 }
 ]
 
+// Activity Data with Labels
+const activities = [
+  {
+    id: 'box-breathing',
+    name: 'Box Breathing',
+    icon: Wind,
+    duration: '2 min',
+    bestFor: 'Stress, test anxiety, calming down',
+    classroomUse: 'Before a quiz or presentation',
+    description: 'Breathe in a calming square pattern'
+  },
+  {
+    id: 'sensory-countdown',
+    name: 'Sensory Countdown',
+    icon: Eye,
+    duration: '3 min',
+    bestFor: 'Feeling overwhelmed or distracted',
+    classroomUse: 'After a transition or noisy activity',
+    description: 'Ground yourself with your senses'
+  },
+  {
+    id: 'look-for-green',
+    name: 'Look for Green',
+    icon: Eye,
+    duration: '2 min',
+    bestFor: 'Refocusing attention',
+    classroomUse: 'Quick reset during class',
+    description: 'Find green objects around you'
+  },
+  {
+    id: 'body-scan',
+    name: 'Body Scan',
+    icon: Heart,
+    duration: '3 min',
+    bestFor: 'Low energy or tension',
+    classroomUse: 'Morning routine or end-of-day reset',
+    description: 'Notice how your body feels'
+  },
+  {
+    id: 'muscle-tension',
+    name: 'Muscle Tension & Release',
+    icon: Hand,
+    duration: '3 min',
+    bestFor: 'Physical tension or frustration',
+    classroomUse: 'After recess, lunch, or stressful moments',
+    description: 'Tense and relax your muscles'
+  }
+]
+
 // Supportive Messages
 const supportiveMessages = [
   "Your BloomBird is ready for today's reset.",
   "No pressure. Want to try a quick reset today?",
   "Your team is 80% of the way to this week's goal.",
   "You helped Team Blue move closer to its goal.",
-  "Great job staying consistent this week!"
+  "Great job staying consistent this week!",
+  "These skills work best when practiced regularly."
 ]
 
 // Green Objects for Look for Green Activity
@@ -85,6 +139,7 @@ export default function StudentExperience() {
   // Student State
   const [bloomPoints, setBloomPoints] = useState(studentProfile.startingPoints)
   const [streak, setStreak] = useState(studentProfile.startingStreak)
+  const [activitiesCompletedToday, setActivitiesCompletedToday] = useState(studentProfile.completedToday)
   const [activitiesCompletedThisWeek, setActivitiesCompletedThisWeek] = useState(studentProfile.completedThisWeek)
   const [teamProgress, setTeamProgress] = useState(76)
   
@@ -105,7 +160,6 @@ export default function StudentExperience() {
   const [activityMood, setActivityMood] = useState<Mood>(null)
   const [activityStress, setActivityStress] = useState<StressLevel>(null)
   const [activityEnergy, setActivityEnergy] = useState<EnergyLevel>(null)
-  const [activityReflection, setActivityReflection] = useState('')
   const [checkInComplete, setCheckInComplete] = useState(false)
   
   // Current Activity State
@@ -145,6 +199,10 @@ export default function StudentExperience() {
   
   // Notification State
   const [currentNotification, setCurrentNotification] = useState(0)
+  
+  // Mood Trend Tracking
+  const [moodHistory, setMoodHistory] = useState<Mood[]>([])
+  const [stressHistory, setStressHistory] = useState<StressLevel[]>([])
 
   // BloomBird helpers
   const getBloomBirdEmoji = () => {
@@ -177,6 +235,16 @@ export default function StudentExperience() {
       case 3: return '🌸'
       case 4: return '🌳'
       default: return '🌱'
+    }
+  }
+  
+  const getGardenStageName = () => {
+    switch (gardenStage) {
+      case 1: return 'Seed'
+      case 2: return 'Small Plant'
+      case 3: return 'Flower'
+      case 4: return 'Tree'
+      default: return 'Seed'
     }
   }
 
@@ -215,6 +283,7 @@ export default function StudentExperience() {
     if (activityStress === 'high') return 'box-breathing'
     if (activityMood === 'stressed') return 'sensory-countdown'
     if (activityMood === 'tired') return 'body-scan'
+    if (activityEnergy === 'low') return 'muscle-tension'
     return 'look-for-green'
   }
   
@@ -223,10 +292,27 @@ export default function StudentExperience() {
     if (dayResponse === 'tired') return 'Body Scan'
     return 'Look for Green'
   }
+  
+  const getMoodTrend = () => {
+    if (moodHistory.length < 2) return 'stable'
+    const recentMoods = moodHistory.slice(-3)
+    const stressedCount = recentMoods.filter(m => m === 'stressed' || m === 'tired').length
+    if (stressedCount >= 2) return 'needs-attention'
+    return 'stable'
+  }
+  
+  const getStressTrend = () => {
+    if (stressHistory.length < 2) return 'stable'
+    const recentStress = stressHistory.slice(-3)
+    const highCount = recentStress.filter(s => s === 'high').length
+    if (highCount >= 2) return 'elevated'
+    return 'stable'
+  }
 
   const completeActivity = useCallback(() => {
     setBloomPoints(prev => prev + 10)
     setStreak(prev => prev + 1)
+    setActivitiesCompletedToday(prev => prev + 1)
     setActivitiesCompletedThisWeek(prev => prev + 1)
     setTeamProgress(prev => Math.min(prev + 2, 100))
     setActivityComplete(true)
@@ -260,10 +346,15 @@ export default function StudentExperience() {
     setMuscleTensionStep(0)
     setShowPostReflection(false)
     setPostFeeling(null)
+    setCheckInComplete(false)
+    setActivityMood(null)
+    setActivityStress(null)
+    setActivityEnergy(null)
   }
 
   const handleDayResponse = (response: Mood) => {
     setDayResponse(response)
+    setMoodHistory(prev => [...prev, response])
     setShowDayPopup(false)
     toast.success(`Thanks for sharing! We suggest: ${getSuggestedActivityFromDayResponse()}`)
   }
@@ -300,6 +391,23 @@ export default function StudentExperience() {
       description: 'Great teamwork everyone!'
     })
   }
+  
+  const handleStartActivity = (activityId: string) => {
+    setCurrentActivity(activityId)
+    setActivityStep(0)
+    setCheckInComplete(false)
+  }
+  
+  const handlePreActivityCheckIn = () => {
+    if (activityMood && activityStress && activityEnergy) {
+      setMoodHistory(prev => [...prev, activityMood])
+      setStressHistory(prev => [...prev, activityStress])
+      setCheckInComplete(true)
+      setActivityStep(1)
+    } else {
+      toast.error('Please complete all check-in questions')
+    }
+  }
 
   // Rotate notifications
   useEffect(() => {
@@ -309,12 +417,407 @@ export default function StudentExperience() {
     return () => clearInterval(interval)
   }, [])
 
-  // Update day response suggestion
+  // Box Breathing Timer
   useEffect(() => {
-    if (dayResponse) {
-      // This effect runs when dayResponse changes
+    if (currentActivity !== 'box-breathing' || breathingPhase === 'idle' || activityComplete) return
+    
+    const phases: ('in' | 'hold1' | 'out' | 'hold2')[] = ['in', 'hold1', 'out', 'hold2']
+    const currentIndex = phases.indexOf(breathingPhase as 'in' | 'hold1' | 'out' | 'hold2')
+    
+    const timer = setTimeout(() => {
+      if (currentIndex === 3) {
+        if (breathingCycle >= 2) {
+          completeActivity()
+        } else {
+          setBreathingCycle(c => c + 1)
+          setBreathingPhase('in')
+        }
+      } else {
+        setBreathingPhase(phases[currentIndex + 1])
+      }
+    }, 4000)
+    
+    return () => clearTimeout(timer)
+  }, [breathingPhase, breathingCycle, currentActivity, activityComplete, completeActivity])
+
+  // Render activity content
+  const renderActivityContent = () => {
+    if (!currentActivity) return null
+    
+    // Pre-activity check-in
+    if (!checkInComplete) {
+      return (
+        <Card className="max-w-lg mx-auto">
+          <CardHeader>
+            <CardTitle>Quick Check-In</CardTitle>
+            <CardDescription>How are you feeling right now?</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Mood</label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { value: 'great' as const, emoji: '😊', label: 'Great' },
+                  { value: 'okay' as const, emoji: '🙂', label: 'Okay' },
+                  { value: 'stressed' as const, emoji: '😰', label: 'Stressed' },
+                  { value: 'tired' as const, emoji: '😴', label: 'Tired' }
+                ].map(option => (
+                  <Button
+                    key={option.value}
+                    variant={activityMood === option.value ? 'default' : 'outline'}
+                    className="flex-col h-16 gap-1"
+                    onClick={() => setActivityMood(option.value)}
+                  >
+                    <span className="text-xl">{option.emoji}</span>
+                    <span className="text-xs">{option.label}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Stress Level</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: 'low' as const, label: 'Low' },
+                  { value: 'medium' as const, label: 'Medium' },
+                  { value: 'high' as const, label: 'High' }
+                ].map(option => (
+                  <Button
+                    key={option.value}
+                    variant={activityStress === option.value ? 'default' : 'outline'}
+                    onClick={() => setActivityStress(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Energy Level</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: 'low' as const, label: 'Low' },
+                  { value: 'medium' as const, label: 'Medium' },
+                  { value: 'high' as const, label: 'High' }
+                ].map(option => (
+                  <Button
+                    key={option.value}
+                    variant={activityEnergy === option.value ? 'default' : 'outline'}
+                    onClick={() => setActivityEnergy(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            {activityStress === 'high' && currentActivity !== 'box-breathing' && (
+              <div className="bg-primary/10 rounded-lg p-3 text-sm">
+                <p className="text-primary font-medium">Suggestion: Box Breathing might help with high stress!</p>
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={resetActivityState}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={handlePreActivityCheckIn}>
+                Start Activity
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )
     }
-  }, [dayResponse])
+    
+    // Post-activity reflection
+    if (showPostReflection) {
+      return (
+        <Card className="max-w-lg mx-auto">
+          <CardHeader>
+            <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-3xl mb-2">
+              <CheckCircle2 className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-center">Great job!</CardTitle>
+            <CardDescription className="text-center">How do you feel now?</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { value: 'better' as const, emoji: '😊', label: 'Better' },
+                { value: 'same' as const, emoji: '🙂', label: 'Same' },
+                { value: 'worse' as const, emoji: '😕', label: 'Need more' }
+              ].map(option => (
+                <Button
+                  key={option.value}
+                  variant={postFeeling === option.value ? 'default' : 'outline'}
+                  className="flex-col h-20 gap-2"
+                  onClick={() => setPostFeeling(option.value)}
+                >
+                  <span className="text-2xl">{option.emoji}</span>
+                  <span>{option.label}</span>
+                </Button>
+              ))}
+            </div>
+            
+            <div className="bg-muted/50 rounded-lg p-4 text-center">
+              <p className="text-sm text-muted-foreground mb-2">Would you like to talk to someone?</p>
+              <Button variant="outline" size="sm" onClick={handleRequestCheckIn}>
+                Request Supportive Check-In
+              </Button>
+            </div>
+            
+            <Button className="w-full" onClick={() => {
+              resetActivityState()
+              setActiveTab('home')
+            }}>
+              Done
+            </Button>
+          </CardContent>
+        </Card>
+      )
+    }
+    
+    // Activity-specific content
+    switch (currentActivity) {
+      case 'box-breathing':
+        return (
+          <Card className="max-w-lg mx-auto">
+            <CardHeader>
+              <CardTitle className="text-center">Box Breathing</CardTitle>
+              <CardDescription className="text-center">Follow the circle and breathe</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-col items-center gap-6">
+                <div className={`w-32 h-32 rounded-full bg-primary/20 flex items-center justify-center transition-all duration-1000 ${
+                  breathingPhase === 'in' ? 'scale-150 bg-primary/40' :
+                  breathingPhase === 'hold1' ? 'scale-150 bg-primary/30' :
+                  breathingPhase === 'out' ? 'scale-100 bg-primary/20' :
+                  breathingPhase === 'hold2' ? 'scale-100 bg-primary/10' : ''
+                }`}>
+                  <span className="text-lg font-medium text-primary">
+                    {breathingPhase === 'idle' ? 'Ready' :
+                     breathingPhase === 'in' ? 'Breathe In' :
+                     breathingPhase === 'hold1' ? 'Hold' :
+                     breathingPhase === 'out' ? 'Breathe Out' : 'Hold'}
+                  </span>
+                </div>
+                
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">Cycle {breathingCycle + 1} of 3</p>
+                  <Progress value={(breathingCycle / 3) * 100} className="h-2 w-32 mt-2" />
+                </div>
+                
+                {breathingPhase === 'idle' && (
+                  <Button onClick={() => setBreathingPhase('in')}>
+                    <Play className="h-4 w-4 mr-2" />
+                    Begin
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )
+        
+      case 'sensory-countdown':
+        const sensorySteps = [
+          { count: 5, sense: 'things you can SEE', emoji: '👀' },
+          { count: 4, sense: 'things you can TOUCH', emoji: '✋' },
+          { count: 3, sense: 'things you can HEAR', emoji: '👂' },
+          { count: 2, sense: 'things you can SMELL', emoji: '👃' },
+          { count: 1, sense: 'thing you can TASTE', emoji: '👅' }
+        ]
+        
+        return (
+          <Card className="max-w-lg mx-auto">
+            <CardHeader>
+              <CardTitle className="text-center">Sensory Countdown</CardTitle>
+              <CardDescription className="text-center">5-4-3-2-1 grounding technique</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {sensorySteps.map((step, index) => (
+                <div 
+                  key={index}
+                  className={`flex items-center gap-4 p-4 rounded-lg transition-all ${
+                    sensoryChecks[index] ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'
+                  }`}
+                >
+                  <div className="text-3xl">{step.emoji}</div>
+                  <div className="flex-1">
+                    <p className="font-medium">Name {step.count} {step.sense}</p>
+                  </div>
+                  <Button
+                    variant={sensoryChecks[index] ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      const newChecks = [...sensoryChecks]
+                      newChecks[index] = !newChecks[index]
+                      setSensoryChecks(newChecks)
+                      
+                      if (newChecks.every(c => c)) {
+                        setTimeout(completeActivity, 500)
+                      }
+                    }}
+                  >
+                    {sensoryChecks[index] ? <CheckCircle2 className="h-4 w-4" /> : 'Done'}
+                  </Button>
+                </div>
+              ))}
+              
+              <Progress value={(sensoryChecks.filter(c => c).length / 5) * 100} className="h-2" />
+            </CardContent>
+          </Card>
+        )
+        
+      case 'look-for-green':
+        const correctCount = selectedGreenObjects.filter(i => greenObjects[i].isGreen).length
+        const targetCount = 5
+        
+        return (
+          <Card className="max-w-lg mx-auto">
+            <CardHeader>
+              <CardTitle className="text-center">Look for Green</CardTitle>
+              <CardDescription className="text-center">Find 5 green objects in your surroundings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center mb-4">
+                <p className="text-2xl font-bold text-primary">{correctCount} / {targetCount}</p>
+                <p className="text-sm text-muted-foreground">green objects found</p>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                {greenObjects.map((obj, index) => (
+                  <Button
+                    key={index}
+                    variant={selectedGreenObjects.includes(index) ? (obj.isGreen ? 'default' : 'destructive') : 'outline'}
+                    className="h-16 text-xs"
+                    onClick={() => {
+                      if (selectedGreenObjects.includes(index)) {
+                        setSelectedGreenObjects(prev => prev.filter(i => i !== index))
+                      } else {
+                        setSelectedGreenObjects(prev => [...prev, index])
+                        if (!obj.isGreen) {
+                          setGreenHint(`"${obj.name}" isn't green - keep looking!`)
+                          setTimeout(() => setGreenHint(null), 2000)
+                        }
+                      }
+                      
+                      const newSelection = selectedGreenObjects.includes(index) 
+                        ? selectedGreenObjects.filter(i => i !== index)
+                        : [...selectedGreenObjects, index]
+                      const newCorrect = newSelection.filter(i => greenObjects[i].isGreen).length
+                      
+                      if (newCorrect >= targetCount) {
+                        setTimeout(completeActivity, 500)
+                      }
+                    }}
+                  >
+                    {obj.name}
+                  </Button>
+                ))}
+              </div>
+              
+              {greenHint && (
+                <p className="text-sm text-center text-amber-600 animate-grow">{greenHint}</p>
+              )}
+              
+              <Progress value={(correctCount / targetCount) * 100} className="h-2" />
+            </CardContent>
+          </Card>
+        )
+        
+      case 'body-scan':
+        const bodyScanSteps = [
+          { area: 'Head & Face', instruction: 'Notice any tension in your forehead, jaw, or neck.' },
+          { area: 'Shoulders & Arms', instruction: 'Let your shoulders drop. Relax your arms and hands.' },
+          { area: 'Chest & Stomach', instruction: 'Take a deep breath. Notice how your chest rises and falls.' },
+          { area: 'Back & Hips', instruction: 'Feel the support beneath you. Release any tension.' },
+          { area: 'Legs & Feet', instruction: 'Relax your thighs, calves, and feet. Feel grounded.' }
+        ]
+        
+        return (
+          <Card className="max-w-lg mx-auto">
+            <CardHeader>
+              <CardTitle className="text-center">Body Scan</CardTitle>
+              <CardDescription className="text-center">Notice how your body feels</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Step {bodyScanStep + 1} of {bodyScanSteps.length}</p>
+                <Progress value={((bodyScanStep + 1) / bodyScanSteps.length) * 100} className="h-2 mt-2" />
+              </div>
+              
+              <div className="bg-primary/5 rounded-xl p-6 text-center space-y-4">
+                <h3 className="text-xl font-semibold text-primary">{bodyScanSteps[bodyScanStep].area}</h3>
+                <p className="text-muted-foreground">{bodyScanSteps[bodyScanStep].instruction}</p>
+              </div>
+              
+              <Button 
+                className="w-full" 
+                onClick={() => {
+                  if (bodyScanStep < bodyScanSteps.length - 1) {
+                    setBodyScanStep(s => s + 1)
+                  } else {
+                    completeActivity()
+                  }
+                }}
+              >
+                {bodyScanStep < bodyScanSteps.length - 1 ? 'Next Area' : 'Complete'}
+                <ChevronRight className="h-4 w-4 ml-2" />
+              </Button>
+            </CardContent>
+          </Card>
+        )
+        
+      case 'muscle-tension':
+        const muscleSteps = [
+          { area: 'Hands', instruction: 'Make tight fists for 5 seconds, then release. Feel the difference.' },
+          { area: 'Arms', instruction: 'Tense your biceps for 5 seconds, then let them go completely.' },
+          { area: 'Shoulders', instruction: 'Shrug your shoulders up to your ears, hold, then drop them.' },
+          { area: 'Face', instruction: 'Scrunch up your face tightly, then relax all the muscles.' },
+          { area: 'Legs', instruction: 'Press your feet into the floor, tense your legs, then release.' }
+        ]
+        
+        return (
+          <Card className="max-w-lg mx-auto">
+            <CardHeader>
+              <CardTitle className="text-center">Muscle Tension & Release</CardTitle>
+              <CardDescription className="text-center">Tense and relax different muscle groups</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Step {muscleTensionStep + 1} of {muscleSteps.length}</p>
+                <Progress value={((muscleTensionStep + 1) / muscleSteps.length) * 100} className="h-2 mt-2" />
+              </div>
+              
+              <div className="bg-accent/20 rounded-xl p-6 text-center space-y-4">
+                <h3 className="text-xl font-semibold">{muscleSteps[muscleTensionStep].area}</h3>
+                <p className="text-muted-foreground">{muscleSteps[muscleTensionStep].instruction}</p>
+              </div>
+              
+              <Button 
+                className="w-full" 
+                onClick={() => {
+                  if (muscleTensionStep < muscleSteps.length - 1) {
+                    setMuscleTensionStep(s => s + 1)
+                  } else {
+                    completeActivity()
+                  }
+                }}
+              >
+                {muscleTensionStep < muscleSteps.length - 1 ? 'Next Muscle Group' : 'Complete'}
+                <ChevronRight className="h-4 w-4 ml-2" />
+              </Button>
+            </CardContent>
+          </Card>
+        )
+        
+      default:
+        return null
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -428,9 +931,73 @@ export default function StudentExperience() {
               <h2 className="text-2xl font-semibold">Welcome back, {studentProfile.name}</h2>
             </div>
 
+            {/* Today's Wellness Routine Card */}
+            <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  {"Today's Wellness Routine"}
+                </CardTitle>
+                <CardDescription>These skills work best when practiced regularly.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{activitiesCompletedToday}/{studentProfile.dailyGoal}</p>
+                    <p className="text-xs text-muted-foreground">Daily Goal</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{activitiesCompletedThisWeek}/{studentProfile.weeklyGoal}</p>
+                    <p className="text-xs text-muted-foreground">Weekly Goal</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{streak}</p>
+                    <p className="text-xs text-muted-foreground">Day Streak</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{bloomPoints}</p>
+                    <p className="text-xs text-muted-foreground">Bloom Points</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between bg-card rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="text-3xl">{getBloomBirdEmoji()}</div>
+                    <div>
+                      <p className="font-medium">BloomBird: {getBloomBirdStateName()}</p>
+                      <p className="text-xs text-muted-foreground">Level {bloomBirdLevel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-3xl">{getGardenEmoji()}</div>
+                    <div>
+                      <p className="font-medium">Garden: {getGardenStageName()}</p>
+                      <p className="text-xs text-muted-foreground">{teamProgress}% team contribution</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-card rounded-lg p-3">
+                  <p className="text-sm text-muted-foreground mb-2">Suggested activity based on your check-in:</p>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{getSuggestedActivityFromDayResponse()}</span>
+                    <Button size="sm" onClick={() => {
+                      const suggested = dayResponse === 'stressed' ? 'box-breathing' : 
+                                       dayResponse === 'tired' ? 'body-scan' : 'look-for-green'
+                      handleStartActivity(suggested)
+                      setActiveTab('activities')
+                    }}>
+                      <Play className="h-4 w-4 mr-1" />
+                      Start My 2-Minute Practice
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {/* BloomBird Card */}
-              <Card className="md:col-span-2 lg:col-span-1 overflow-hidden">
+              <Card className="overflow-hidden">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-lg">
                     <span>Your BloomBird</span>
@@ -484,18 +1051,18 @@ export default function StudentExperience() {
                 </CardContent>
               </Card>
 
-              {/* Weekly Goal */}
+              {/* Team Card */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Target className="h-5 w-5 text-primary" />
-                    Weekly Goal
+                    <Users className="h-5 w-5 text-blue-500" />
+                    {studentProfile.team}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Progress value={(activitiesCompletedThisWeek / studentProfile.weeklyGoal) * 100} className="h-2" />
+                  <Progress value={teamProgress} className="h-2" />
                   <p className="text-sm text-muted-foreground">
-                    {activitiesCompletedThisWeek} / {studentProfile.weeklyGoal} activities
+                    {teamProgress}% of weekly goal
                   </p>
                 </CardContent>
               </Card>
@@ -509,196 +1076,95 @@ export default function StudentExperience() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xl font-semibold">{studentProfile.buddy}</div>
-                  <p className="text-sm text-muted-foreground">Wellness partner</p>
+                  <p className="font-medium">{studentProfile.buddy}</p>
+                  <p className="text-sm text-muted-foreground">Encourage each other!</p>
                 </CardContent>
               </Card>
 
-              {/* Team Progress */}
+              {/* Bloom Garden Card */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    {studentProfile.team}
+                    <span className="text-xl">{getGardenEmoji()}</span>
+                    Bloom Garden
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <Progress value={teamProgress} className="h-2" />
-                  <p className="text-sm text-muted-foreground">{teamProgress}% weekly goal</p>
+                <CardContent>
+                  <p className="font-medium">{getGardenStageName()}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {gardenStage < 4 ? `${4 - activitiesCompletedThisWeek} more activities to grow` : 'Fully grown!'}
+                  </p>
                 </CardContent>
               </Card>
             </div>
-
-            {/* Suggested Activity */}
-            <Card className="border-primary/30 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  Suggested Activity of the Day
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{getSuggestedActivityFromDayResponse()}</p>
-                  <p className="text-sm text-muted-foreground">Based on your check-in</p>
-                </div>
-                <Button onClick={() => setActiveTab('activities')}>
-                  Start <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           {/* ACTIVITIES TAB */}
           <TabsContent value="activities" className="space-y-6">
-            {!currentActivity && !checkInComplete && (
+            {currentActivity ? (
               <>
-                <h2 className="text-2xl font-semibold">Quick Check-In</h2>
-                <p className="text-muted-foreground">Tell us how you&apos;re feeling to get the best activity recommendation.</p>
-                
-                <div className="grid gap-4">
-                  {/* Mood */}
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Current Mood</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-4 gap-2">
-                        {[
-                          { value: 'great' as const, emoji: '😌', label: 'Calm' },
-                          { value: 'okay' as const, emoji: '🙂', label: 'Okay' },
-                          { value: 'stressed' as const, emoji: '😰', label: 'Stressed' },
-                          { value: 'tired' as const, emoji: '😴', label: 'Tired' }
-                        ].map(option => (
-                          <Button
-                            key={option.value}
-                            variant={activityMood === option.value ? 'default' : 'outline'}
-                            className="h-auto flex-col gap-1 py-3"
-                            onClick={() => setActivityMood(option.value)}
-                          >
-                            <span className="text-xl">{option.emoji}</span>
-                            <span className="text-xs">{option.label}</span>
-                          </Button>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Stress */}
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Stress Level</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { value: 'low' as const, color: 'bg-green-500', label: 'Low' },
-                          { value: 'medium' as const, color: 'bg-yellow-500', label: 'Medium' },
-                          { value: 'high' as const, color: 'bg-red-500', label: 'High' }
-                        ].map(option => (
-                          <Button
-                            key={option.value}
-                            variant={activityStress === option.value ? 'default' : 'outline'}
-                            className="gap-2"
-                            onClick={() => setActivityStress(option.value)}
-                          >
-                            <div className={`w-3 h-3 rounded-full ${option.color}`} />
-                            {option.label}
-                          </Button>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Energy */}
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Energy Level</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { value: 'low' as const, emoji: '🔋', label: 'Low' },
-                          { value: 'medium' as const, emoji: '⚡', label: 'Medium' },
-                          { value: 'high' as const, emoji: '💪', label: 'High' }
-                        ].map(option => (
-                          <Button
-                            key={option.value}
-                            variant={activityEnergy === option.value ? 'default' : 'outline'}
-                            className="gap-2"
-                            onClick={() => setActivityEnergy(option.value)}
-                          >
-                            <span>{option.emoji}</span>
-                            {option.label}
-                          </Button>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Optional Reflection */}
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">One sentence about your day (optional)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <textarea
-                        className="w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                        rows={2}
-                        placeholder="How's your day going?"
-                        value={activityReflection}
-                        onChange={(e) => setActivityReflection(e.target.value)}
-                      />
-                    </CardContent>
-                  </Card>
-
-                  <Button 
-                    size="lg" 
-                    className="w-full"
-                    disabled={!activityMood || !activityStress || !activityEnergy}
-                    onClick={() => setCheckInComplete(true)}
-                  >
-                    <CheckCircle2 className="mr-2 h-5 w-5" />
-                    Continue to Activities
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={resetActivityState}>
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    Back
                   </Button>
                 </div>
+                {renderActivityContent()}
               </>
-            )}
-
-            {checkInComplete && !currentActivity && (
+            ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-semibold">Choose an Activity</h2>
-                  <Badge className="bg-primary/10 text-primary">
-                    Recommended: {getRecommendedActivity().replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  </Badge>
+                  <div>
+                    <h2 className="text-2xl font-semibold">Wellness Activities</h2>
+                    <p className="text-muted-foreground">Choose an activity to complete your daily practice</p>
+                  </div>
                 </div>
+                
+                {activityStress === 'high' && (
+                  <Card className="border-primary/30 bg-primary/5">
+                    <CardContent className="py-4">
+                      <p className="text-sm text-primary">
+                        <strong>Recommended:</strong> Based on your check-in, Box Breathing might help with high stress.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  {[
-                    { id: 'box-breathing', name: 'Box Breathing', icon: Wind, description: 'Calm your mind with guided breathing', time: '2 min' },
-                    { id: 'sensory-countdown', name: 'Sensory Countdown', icon: Eye, description: '5-4-3-2-1 grounding exercise', time: '3 min' },
-                    { id: 'look-for-green', name: 'Look for Green', icon: Sparkles, description: 'Find green objects around you', time: '2 min' },
-                    { id: 'body-scan', name: 'Body Scan', icon: Activity, description: 'Notice sensations in your body', time: '3 min' },
-                    { id: 'muscle-tension', name: 'Muscle Tension & Release', icon: Hand, description: 'Tense and release muscle groups', time: '3 min' }
-                  ].map(activity => {
+                  {activities.map(activity => {
                     const isRecommended = getRecommendedActivity() === activity.id
                     return (
                       <Card 
                         key={activity.id} 
-                        className={`cursor-pointer transition-all hover:shadow-md ${isRecommended ? 'border-primary bg-primary/5' : ''}`}
-                        onClick={() => setCurrentActivity(activity.id)}
+                        className={`cursor-pointer hover:shadow-lg transition-all ${isRecommended ? 'border-primary/50 bg-primary/5' : ''}`}
+                        onClick={() => handleStartActivity(activity.id)}
                       >
-                        <CardHeader>
-                          <div className="flex items-center justify-between">
-                            <activity.icon className={`h-8 w-8 ${isRecommended ? 'text-primary' : 'text-muted-foreground'}`} />
-                            {isRecommended && <Badge className="bg-primary">Recommended</Badge>}
+                        <CardHeader className="pb-2">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                <activity.icon className="h-6 w-6 text-primary" />
+                              </div>
+                              <div>
+                                <CardTitle className="text-lg flex items-center gap-2">
+                                  {activity.name}
+                                  {isRecommended && <Badge variant="secondary" className="text-xs">Suggested</Badge>}
+                                </CardTitle>
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  {activity.duration}
+                                </div>
+                              </div>
+                            </div>
+                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
                           </div>
-                          <CardTitle className="text-lg">{activity.name}</CardTitle>
-                          <CardDescription>{activity.description}</CardDescription>
                         </CardHeader>
-                        <CardContent>
-                          <p className="text-sm text-muted-foreground">{activity.time}</p>
+                        <CardContent className="space-y-2">
+                          <p className="text-sm text-muted-foreground">{activity.description}</p>
+                          <div className="bg-muted/50 rounded-lg p-2 space-y-1">
+                            <p className="text-xs"><strong>Best for:</strong> {activity.bestFor}</p>
+                            <p className="text-xs"><strong>Classroom use:</strong> {activity.classroomUse}</p>
+                          </div>
                         </CardContent>
                       </Card>
                     )
@@ -706,343 +1172,246 @@ export default function StudentExperience() {
                 </div>
               </>
             )}
-
-            {/* BOX BREATHING ACTIVITY */}
-            {currentActivity === 'box-breathing' && !showPostReflection && (
-              <BoxBreathingActivity
-                breathingPhase={breathingPhase}
-                setBreathingPhase={setBreathingPhase}
-                breathingCycle={breathingCycle}
-                setBreathingCycle={setBreathingCycle}
-                activityComplete={activityComplete}
-                completeActivity={completeActivity}
-                resetActivityState={resetActivityState}
-              />
-            )}
-
-            {/* SENSORY COUNTDOWN ACTIVITY */}
-            {currentActivity === 'sensory-countdown' && !showPostReflection && (
-              <SensoryCountdownActivity
-                sensoryChecks={sensoryChecks}
-                setSensoryChecks={setSensoryChecks}
-                activityComplete={activityComplete}
-                completeActivity={completeActivity}
-                resetActivityState={resetActivityState}
-              />
-            )}
-
-            {/* LOOK FOR GREEN ACTIVITY */}
-            {currentActivity === 'look-for-green' && !showPostReflection && (
-              <LookForGreenActivity
-                selectedGreenObjects={selectedGreenObjects}
-                setSelectedGreenObjects={setSelectedGreenObjects}
-                greenHint={greenHint}
-                setGreenHint={setGreenHint}
-                activityComplete={activityComplete}
-                completeActivity={completeActivity}
-                resetActivityState={resetActivityState}
-              />
-            )}
-
-            {/* BODY SCAN ACTIVITY */}
-            {currentActivity === 'body-scan' && !showPostReflection && (
-              <BodyScanActivity
-                bodyScanStep={bodyScanStep}
-                setBodyScanStep={setBodyScanStep}
-                activityComplete={activityComplete}
-                completeActivity={completeActivity}
-                resetActivityState={resetActivityState}
-              />
-            )}
-
-            {/* MUSCLE TENSION ACTIVITY */}
-            {currentActivity === 'muscle-tension' && !showPostReflection && (
-              <MuscleTensionActivity
-                muscleTensionStep={muscleTensionStep}
-                setMuscleTensionStep={setMuscleTensionStep}
-                activityComplete={activityComplete}
-                completeActivity={completeActivity}
-                resetActivityState={resetActivityState}
-              />
-            )}
-
-            {/* POST-ACTIVITY REFLECTION */}
-            {showPostReflection && (
-              <Card className="max-w-lg mx-auto">
-                <CardHeader>
-                  <CardTitle>How do you feel now?</CardTitle>
-                  <CardDescription>Your feedback helps us improve</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { value: 'better' as const, emoji: '😊', label: 'Better' },
-                      { value: 'same' as const, emoji: '😐', label: 'Same' },
-                      { value: 'worse' as const, emoji: '😔', label: 'Worse' }
-                    ].map(option => (
-                      <Button
-                        key={option.value}
-                        variant={postFeeling === option.value ? 'default' : 'outline'}
-                        className="h-auto flex-col gap-2 py-4"
-                        onClick={() => setPostFeeling(option.value)}
-                      >
-                        <span className="text-2xl">{option.emoji}</span>
-                        <span>{option.label}</span>
-                      </Button>
-                    ))}
-                  </div>
-
-                  {postFeeling === 'worse' && (
-                    <div className="bg-primary/5 rounded-lg p-4 space-y-3 animate-grow">
-                      <p className="text-sm">
-                        Thanks for being honest. You can try another reset or ask for a supportive check-in.
-                      </p>
-                      <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => {
-                          resetActivityState()
-                          setCheckInComplete(true)
-                        }}>
-                          Try Another Activity
-                        </Button>
-                        <Button onClick={handleRequestCheckIn}>
-                          Request Check-in
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {postFeeling && postFeeling !== 'worse' && (
-                    <Button className="w-full" onClick={() => {
-                      resetActivityState()
-                      setCheckInComplete(false)
-                      setActivityMood(null)
-                      setActivityStress(null)
-                      setActivityEnergy(null)
-                      setActivityReflection('')
-                      setActiveTab('home')
-                      toast.success('Great job completing your activity!')
-                    }}>
-                      Back to Home
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            )}
           </TabsContent>
 
           {/* TEAM TAB */}
           <TabsContent value="team" className="space-y-6">
             <div>
-              <h2 className="text-2xl font-semibold">Calm Classroom Challenge</h2>
-              <p className="text-muted-foreground">Complete 100 wellness activities as a class this week.</p>
+              <h2 className="text-2xl font-semibold">Team Challenge</h2>
+              <p className="text-muted-foreground">Work together to reach your goals</p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Team Progress */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    {studentProfile.team} Progress
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  Weekly Class Challenge
+                </CardTitle>
+                <CardDescription>Complete 100 wellness activities as a class</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Class Progress</span>
+                    <span className="font-medium">{teamProgress}%</span>
+                  </div>
                   <Progress value={teamProgress} className="h-3" />
-                  <p className="text-sm text-muted-foreground">{teamProgress}% of weekly goal</p>
-                </CardContent>
-              </Card>
+                </div>
+                <Button onClick={handleCelebrateTeam} variant="outline" className="w-full">
+                  Celebrate Team Progress
+                </Button>
+              </CardContent>
+            </Card>
 
-              {/* Buddy Progress */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Heart className="h-5 w-5 text-pink-500" />
-                    Buddy Support
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="font-medium">{studentProfile.buddy}</p>
-                  <p className="text-sm text-muted-foreground">Your wellness partner is doing great!</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Team Leaderboard */}
             <Card>
               <CardHeader>
                 <CardTitle>Team Leaderboard</CardTitle>
-                <CardDescription>Rankings are based on participation only.</CardDescription>
+                <CardDescription>See how all teams are doing</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {teams.map((team, index) => (
                     <div 
                       key={team.name} 
-                      className={`flex items-center justify-between p-3 rounded-lg ${team.name === studentProfile.team ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'}`}
+                      className={`flex items-center gap-4 p-3 rounded-lg ${
+                        team.name === studentProfile.team ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'
+                      }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
-                          index === 0 ? 'bg-yellow-500' : 
-                          index === 1 ? 'bg-gray-400' : 
-                          index === 2 ? 'bg-amber-600' : 'bg-muted-foreground'
-                        }`}>
-                          {index + 1}
-                        </div>
-                        <span className="font-medium">{team.name}</span>
-                        {team.name === studentProfile.team && (
-                          <Badge variant="outline" className="text-xs">Your team</Badge>
-                        )}
+                      <div className="text-2xl font-bold text-muted-foreground w-8">
+                        {index + 1}
                       </div>
-                      <span className="font-semibold">{team.participation}%</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{team.name}</p>
+                          {team.name === studentProfile.team && (
+                            <Badge variant="secondary" className="text-xs">Your Team</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{team.activities} activities completed</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-primary">{team.participation}%</p>
+                        <p className="text-xs text-muted-foreground">participation</p>
+                      </div>
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Team Challenges */}
             <Card>
               <CardHeader>
-                <CardTitle>Team Challenges</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-pink-500" />
+                  Buddy System
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    { title: 'Complete 100 wellness activities', progress: 76 },
-                    { title: 'Reach 80% weekly participation', progress: teamProgress },
-                    { title: 'Try 3 different wellness skills', progress: 66 },
-                    { title: 'Complete a 5-day team streak', progress: 80 }
-                  ].map((challenge, i) => (
-                    <div key={i} className="p-3 rounded-lg border bg-card">
-                      <p className="text-sm font-medium mb-2">{challenge.title}</p>
-                      <Progress value={challenge.progress} className="h-2" />
-                      <p className="text-xs text-muted-foreground mt-1">{challenge.progress}%</p>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-medium">Your Buddy: {studentProfile.buddy}</p>
+                    <p className="text-sm text-muted-foreground">Encourage each other to keep your streaks going!</p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    Send Encouragement
+                  </Button>
                 </div>
               </CardContent>
             </Card>
-
-            <Button size="lg" onClick={handleCelebrateTeam} className="w-full md:w-auto">
-              🎉 Celebrate Team Progress
-            </Button>
           </TabsContent>
 
           {/* PROGRESS TAB */}
           <TabsContent value="progress" className="space-y-6">
-            <h2 className="text-2xl font-semibold">Your Progress</h2>
+            <div>
+              <h2 className="text-2xl font-semibold">Your Progress</h2>
+              <p className="text-muted-foreground">Track your wellness journey</p>
+            </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {/* Daily */}
+            {/* Your Patterns Card */}
+            <Card className="border-primary/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Your Patterns
+                </CardTitle>
+                <CardDescription>Your participation pattern this week</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <p className="text-2xl font-bold">{activitiesCompletedThisWeek}</p>
+                    <p className="text-xs text-muted-foreground">Activities this week</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <p className="text-2xl font-bold">{streak}</p>
+                    <p className="text-xs text-muted-foreground">Current streak</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <p className="text-2xl font-bold">{weeklyCheckInSubmitted ? 'Done' : 'Pending'}</p>
+                    <p className="text-xs text-muted-foreground">Weekly check-in</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <p className="text-2xl font-bold capitalize">{getMoodTrend()}</p>
+                    <p className="text-xs text-muted-foreground">Mood trend</p>
+                  </div>
+                </div>
+                
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <p className="text-sm font-medium">Stress trend</p>
+                    <p className="text-lg capitalize">{getStressTrend()}</p>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <p className="text-sm font-medium">Support request</p>
+                    <p className="text-lg">{supportRequested ? 'Sent' : 'None'}</p>
+                  </div>
+                </div>
+                
+                {supportRequested && (
+                  <div className="mt-4 p-3 bg-primary/10 rounded-lg">
+                    <p className="text-sm text-primary">Supportive check-in available. A counselor will reach out soon.</p>
+                  </div>
+                )}
+                
+                <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Would you like support?</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2"
+                    onClick={handleRequestCheckIn}
+                    disabled={supportRequested}
+                  >
+                    {supportRequested ? 'Check-in requested' : 'Request check-in'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Bloom Garden */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Today</CardTitle>
+                <CardHeader>
+                  <CardTitle>Bloom Garden</CardTitle>
+                  <CardDescription>Watch your garden grow with each activity</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-primary">{activityComplete ? '1' : '0'}</div>
-                  <p className="text-sm text-muted-foreground">activity completed</p>
+                  <div className="flex items-center justify-center h-40 bg-gradient-to-b from-sky-100 to-green-100 dark:from-sky-900/20 dark:to-green-900/20 rounded-xl">
+                    <div className="text-center">
+                      <div className="text-6xl mb-2">{getGardenEmoji()}</div>
+                      <p className="font-medium">{getGardenStageName()}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-4 gap-2">
+                    {['🌱', '🌿', '🌸', '🌳'].map((emoji, i) => (
+                      <div 
+                        key={i} 
+                        className={`text-center p-2 rounded-lg ${i + 1 <= gardenStage ? 'bg-primary/10' : 'bg-muted/30 opacity-50'}`}
+                      >
+                        <span className="text-2xl">{emoji}</span>
+                        <p className="text-xs mt-1">{['Seed', 'Plant', 'Flower', 'Tree'][i]}</p>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 
-              {/* Weekly */}
+              {/* BloomBird Progress */}
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">This Week</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="text-3xl font-bold text-primary">{activitiesCompletedThisWeek}</div>
-                  <Progress value={(activitiesCompletedThisWeek / studentProfile.weeklyGoal) * 100} className="h-2" />
-                  <p className="text-sm text-muted-foreground">of {studentProfile.weeklyGoal} goal</p>
-                </CardContent>
-              </Card>
-
-              {/* Monthly */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">This Month</CardTitle>
+                <CardHeader>
+                  <CardTitle>BloomBird Growth</CardTitle>
+                  <CardDescription>Level up your BloomBird companion</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-primary">12</div>
-                  <p className="text-sm text-muted-foreground">activities completed</p>
-                </CardContent>
-              </Card>
-
-              {/* Points */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Star className="h-5 w-5 text-yellow-500" />
-                    Total Points
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{bloomPoints}</div>
-                </CardContent>
-              </Card>
-
-              {/* Streak */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Flame className="h-5 w-5 text-orange-500" />
-                    Streak Milestones
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{streak} days</div>
-                  <p className="text-sm text-muted-foreground">Best: 7 days</p>
-                </CardContent>
-              </Card>
-
-              {/* Team Contribution */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    Team Contribution
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">{activitiesCompletedThisWeek * 2}%</div>
-                  <p className="text-sm text-muted-foreground">of team activities</p>
+                  <div className={`flex items-center justify-center h-40 bg-gradient-to-br from-mint to-primary/10 rounded-xl text-6xl ${isBloomBirdCelebrating ? 'animate-celebrate' : 'animate-float'}`}>
+                    {getBloomBirdEmoji()}
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span>Level {bloomBirdLevel} Progress</span>
+                      <span>{bloomBirdProgress}%</span>
+                    </div>
+                    <Progress value={bloomBirdProgress} className="h-2" />
+                  </div>
+                  <div className="mt-4 grid grid-cols-5 gap-1">
+                    {['🐦', '🐦✨', '🐦🌿', '🐦🎉', '🐦🌈'].map((emoji, i) => (
+                      <div 
+                        key={i} 
+                        className={`text-center p-1 rounded ${i + 1 <= bloomBirdLevel ? 'bg-primary/10' : 'bg-muted/30 opacity-50'}`}
+                      >
+                        <span className="text-lg">{emoji}</span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* BloomBird Progress */}
+            {/* Milestones */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">{getBloomBirdEmoji()}</span>
-                  BloomBird Level {bloomBirdLevel}
-                </CardTitle>
-                <CardDescription>{getBloomBirdStateName()}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Progress value={bloomBirdProgress} className="h-3" />
-                <p className="text-sm text-muted-foreground">{bloomBirdProgress}% to next level</p>
-              </CardContent>
-            </Card>
-
-            {/* Bloom Garden */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Bloom Garden</CardTitle>
-                <CardDescription>Your garden grows as you complete activities</CardDescription>
+                <CardTitle>Milestones</CardTitle>
+                <CardDescription>Celebrate your achievements</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-center h-32 rounded-xl bg-gradient-to-b from-sky-100 to-green-100 dark:from-sky-900/20 dark:to-green-900/20">
-                  <span className={`text-6xl transition-all duration-500 ${gardenStage >= 3 ? 'animate-float' : ''}`}>
-                    {getGardenEmoji()}
-                  </span>
-                </div>
-                <div className="flex justify-between mt-4 px-4">
-                  {['🌱', '🌿', '🌸', '🌳'].map((emoji, i) => (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { name: 'First Activity', icon: '🎯', earned: activitiesCompletedThisWeek >= 1 },
+                    { name: '3-Day Streak', icon: '🔥', earned: streak >= 3 },
+                    { name: 'Weekly Goal', icon: '🏆', earned: activitiesCompletedThisWeek >= studentProfile.weeklyGoal },
+                    { name: 'Team Player', icon: '🤝', earned: teamProgress >= 50 },
+                    { name: '5-Day Streak', icon: '⭐', earned: streak >= 5 },
+                    { name: 'Garden Grown', icon: '🌳', earned: gardenStage >= 4 },
+                    { name: 'Super BloomBird', icon: '🌈', earned: bloomBirdLevel >= 5 },
+                    { name: '100 Points', icon: '💎', earned: bloomPoints >= 100 }
+                  ].map(milestone => (
                     <div 
-                      key={i} 
-                      className={`text-2xl ${i + 1 <= gardenStage ? 'opacity-100' : 'opacity-30'}`}
+                      key={milestone.name}
+                      className={`text-center p-4 rounded-lg ${milestone.earned ? 'bg-primary/10 border border-primary/30' : 'bg-muted/30 opacity-60'}`}
                     >
-                      {emoji}
+                      <div className="text-3xl mb-2">{milestone.icon}</div>
+                      <p className="text-sm font-medium">{milestone.name}</p>
+                      {milestone.earned && <CheckCircle2 className="h-4 w-4 text-primary mx-auto mt-1" />}
                     </div>
                   ))}
                 </div>
@@ -1052,64 +1421,76 @@ export default function StudentExperience() {
 
           {/* WEEKLY CHECK-IN TAB */}
           <TabsContent value="weekly" className="space-y-6">
-            <h2 className="text-2xl font-semibold">Weekly Wellness Check-In</h2>
+            <div>
+              <h2 className="text-2xl font-semibold">Weekly Check-In</h2>
+              <p className="text-muted-foreground">Help us understand how you are doing (+15 Bloom Points)</p>
+            </div>
 
-            {!weeklyCheckInSubmitted ? (
-              <div className="space-y-4 max-w-2xl">
-                {/* Stress */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">How was your stress this week?</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+            {weeklyCheckInSubmitted ? (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="py-8 text-center">
+                  <CheckCircle2 className="h-16 w-16 text-primary mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">Weekly Check-In Complete!</h3>
+                  <p className="text-muted-foreground mb-4">Thank you for sharing. Your responses help us support you better.</p>
+                  {supportRequested && (
+                    <div className="bg-card rounded-lg p-4 max-w-md mx-auto">
+                      <p className="text-sm text-primary">A counselor may reach out to check in with you.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>How has your week been?</CardTitle>
+                  <CardDescription>Your answers are private and help us support you</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Stress Level */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">How stressed have you felt this week?</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { value: 'low' as const, label: 'Low' },
-                        { value: 'medium' as const, label: 'Medium' },
-                        { value: 'high' as const, label: 'High' }
+                        { value: 'low' as const, label: 'Not very stressed' },
+                        { value: 'medium' as const, label: 'Somewhat stressed' },
+                        { value: 'high' as const, label: 'Very stressed' }
                       ].map(option => (
                         <Button
                           key={option.value}
                           variant={weeklyStress === option.value ? 'default' : 'outline'}
+                          className="h-auto py-3"
                           onClick={() => setWeeklyStress(option.value)}
                         >
                           {option.label}
                         </Button>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* Sleep */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">How was your sleep this week?</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                  {/* Sleep */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">How has your sleep been?</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { value: 'good' as const, label: 'Good' },
-                        { value: 'okay' as const, label: 'Okay' },
-                        { value: 'poor' as const, label: 'Poor' }
+                        { value: 'good' as const, label: 'Good sleep' },
+                        { value: 'okay' as const, label: 'Okay sleep' },
+                        { value: 'poor' as const, label: 'Poor sleep' }
                       ].map(option => (
                         <Button
                           key={option.value}
                           variant={weeklySleep === option.value ? 'default' : 'outline'}
+                          className="h-auto py-3"
                           onClick={() => setWeeklySleep(option.value)}
                         >
                           {option.label}
                         </Button>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* Connection */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">How connected did you feel?</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                  {/* Connection */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">How connected do you feel to others?</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
                         { value: 'connected' as const, label: 'Connected' },
@@ -1119,86 +1500,60 @@ export default function StudentExperience() {
                         <Button
                           key={option.value}
                           variant={weeklyConnection === option.value ? 'default' : 'outline'}
-                          className="text-sm"
+                          className="h-auto py-3"
                           onClick={() => setWeeklyConnection(option.value)}
                         >
                           {option.label}
                         </Button>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* Activities */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Did you complete wellness activities?</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                  {/* Activities Helping */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Are the wellness activities helping?</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { value: 'yes' as const, label: 'Yes' },
-                        { value: 'some' as const, label: 'Some' },
-                        { value: 'no' as const, label: 'No' }
+                        { value: 'yes' as const, label: 'Yes, a lot' },
+                        { value: 'some' as const, label: 'A little' },
+                        { value: 'no' as const, label: 'Not really' }
                       ].map(option => (
                         <Button
                           key={option.value}
                           variant={weeklyActivities === option.value ? 'default' : 'outline'}
+                          className="h-auto py-3"
                           onClick={() => setWeeklyActivities(option.value)}
                         >
                           {option.label}
                         </Button>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                {/* Counselor */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Would you like a counselor to check in?</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                  {/* Counselor Check-in */}
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Would you like to talk to a counselor?</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[
-                        { value: 'yes' as const, label: 'Yes' },
-                        { value: 'maybe' as const, label: 'Maybe' },
-                        { value: 'no' as const, label: 'No' }
+                        { value: 'yes' as const, label: 'Yes, please' },
+                        { value: 'maybe' as const, label: 'Maybe later' },
+                        { value: 'no' as const, label: 'No, I\'m okay' }
                       ].map(option => (
                         <Button
                           key={option.value}
                           variant={wantsCounselorCheckIn === option.value ? 'default' : 'outline'}
+                          className="h-auto py-3"
                           onClick={() => setWantsCounselorCheckIn(option.value)}
                         >
                           {option.label}
                         </Button>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Button size="lg" className="w-full" onClick={handleWeeklySubmit}>
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Submit Weekly Check-In (+15 points)
-                </Button>
-              </div>
-            ) : (
-              <Card className="max-w-md">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <CheckCircle2 className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>Check-In Complete!</CardTitle>
-                      <CardDescription>Thanks for sharing how your week went</CardDescription>
-                    </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Your weekly check-in has been submitted. +15 Bloom Points added!
-                  </p>
+
+                  <Button className="w-full" size="lg" onClick={handleWeeklySubmit}>
+                    Submit Weekly Check-In (+15 Points)
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -1206,486 +1561,5 @@ export default function StudentExperience() {
         </Tabs>
       </main>
     </div>
-  )
-}
-
-// Activity Components
-function BoxBreathingActivity({
-  breathingPhase,
-  setBreathingPhase,
-  breathingCycle,
-  setBreathingCycle,
-  activityComplete,
-  completeActivity,
-  resetActivityState
-}: {
-  breathingPhase: 'idle' | 'in' | 'hold1' | 'out' | 'hold2'
-  setBreathingPhase: (phase: 'idle' | 'in' | 'hold1' | 'out' | 'hold2') => void
-  breathingCycle: number
-  setBreathingCycle: (cycle: number | ((c: number) => number)) => void
-  activityComplete: boolean
-  completeActivity: () => void
-  resetActivityState: () => void
-}) {
-  const [timer, setTimer] = useState(4)
-
-  useEffect(() => {
-    if (breathingPhase === 'idle') return
-
-    const interval = setInterval(() => {
-      setTimer(t => {
-        if (t <= 1) {
-          // Move to next phase
-          if (breathingPhase === 'in') {
-            setBreathingPhase('hold1')
-          } else if (breathingPhase === 'hold1') {
-            setBreathingPhase('out')
-          } else if (breathingPhase === 'out') {
-            setBreathingPhase('hold2')
-          } else if (breathingPhase === 'hold2') {
-            setBreathingCycle((c: number) => c + 1)
-            setBreathingPhase('in')
-          }
-          return 4
-        }
-        return t - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [breathingPhase, setBreathingPhase, setBreathingCycle])
-
-  const startBreathing = () => {
-    setBreathingPhase('in')
-    setTimer(4)
-  }
-
-  const getPhaseText = () => {
-    switch (breathingPhase) {
-      case 'in': return 'Breathe in...'
-      case 'hold1': return 'Hold...'
-      case 'out': return 'Breathe out...'
-      case 'hold2': return 'Hold...'
-      default: return 'Get ready...'
-    }
-  }
-
-  const getStepNumber = () => {
-    switch (breathingPhase) {
-      case 'in': return 1
-      case 'hold1': return 2
-      case 'out': return 3
-      case 'hold2': return 4
-      default: return 0
-    }
-  }
-
-  return (
-    <Card className="max-w-lg mx-auto">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Wind className="h-5 w-5 text-primary" />
-            Box Breathing
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={resetActivityState}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <CardDescription>Calm your mind with guided breathing</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Breathing Circle */}
-        <div className="flex justify-center">
-          <div className={`w-40 h-40 rounded-full flex items-center justify-center border-4 transition-all duration-1000 ${
-            breathingPhase === 'idle' ? 'border-muted bg-muted/20' :
-            breathingPhase === 'in' || breathingPhase === 'out' ? 'border-primary bg-primary/20 animate-breathe' :
-            'border-accent bg-accent/20'
-          }`}>
-            <div className="text-center">
-              <div className="text-4xl font-bold">{breathingPhase !== 'idle' ? timer : ''}</div>
-              <div className="text-sm text-muted-foreground">{getPhaseText()}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Step Counter */}
-        {breathingPhase !== 'idle' && (
-          <div className="text-center">
-            <Badge variant="outline">Step {getStepNumber()} of 4</Badge>
-            <p className="text-sm text-muted-foreground mt-2">Cycle {breathingCycle + 1} of 4</p>
-          </div>
-        )}
-
-        {/* Controls */}
-        {breathingPhase === 'idle' && !activityComplete && (
-          <Button className="w-full" size="lg" onClick={startBreathing}>
-            Start Breathing
-          </Button>
-        )}
-
-        {breathingCycle >= 4 && !activityComplete && (
-          <Button className="w-full" size="lg" onClick={completeActivity}>
-            <CheckCircle2 className="mr-2 h-5 w-5" />
-            Complete Activity
-          </Button>
-        )}
-
-        {activityComplete && (
-          <div className="text-center p-4 rounded-lg bg-primary/10">
-            <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-            <p className="font-medium text-primary">Nice work! You completed Box Breathing.</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function SensoryCountdownActivity({
-  sensoryChecks,
-  setSensoryChecks,
-  activityComplete,
-  completeActivity,
-  resetActivityState
-}: {
-  sensoryChecks: boolean[]
-  setSensoryChecks: (checks: boolean[]) => void
-  activityComplete: boolean
-  completeActivity: () => void
-  resetActivityState: () => void
-}) {
-  const items = [
-    { count: 5, sense: 'see', emoji: '👀' },
-    { count: 4, sense: 'feel', emoji: '✋' },
-    { count: 3, sense: 'hear', emoji: '👂' },
-    { count: 2, sense: 'smell', emoji: '👃' },
-    { count: 1, sense: 'taste', emoji: '👅' }
-  ]
-
-  const toggleCheck = (index: number) => {
-    const newChecks = [...sensoryChecks]
-    newChecks[index] = !newChecks[index]
-    setSensoryChecks(newChecks)
-  }
-
-  const allChecked = sensoryChecks.every(c => c)
-
-  return (
-    <Card className="max-w-lg mx-auto">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5 text-primary" />
-            Sensory Countdown
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={resetActivityState}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <CardDescription>5-4-3-2-1 grounding exercise</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {items.map((item, index) => (
-          <button
-            key={index}
-            onClick={() => toggleCheck(index)}
-            className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-              sensoryChecks[index] 
-                ? 'border-primary bg-primary/10' 
-                : 'border-border hover:border-primary/50'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{item.emoji}</span>
-                <span className="font-medium">
-                  {item.count} thing{item.count > 1 ? 's' : ''} you can {item.sense}
-                </span>
-              </div>
-              {sensoryChecks[index] && (
-                <CheckCircle2 className="h-5 w-5 text-primary" />
-              )}
-            </div>
-          </button>
-        ))}
-
-        <Button 
-          className="w-full" 
-          size="lg" 
-          disabled={!allChecked || activityComplete}
-          onClick={completeActivity}
-        >
-          {activityComplete ? (
-            <>
-              <CheckCircle2 className="mr-2 h-5 w-5" />
-              Completed!
-            </>
-          ) : (
-            'Complete Activity'
-          )}
-        </Button>
-
-        {activityComplete && (
-          <p className="text-center text-sm text-primary">
-            You practiced grounding your attention.
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function LookForGreenActivity({
-  selectedGreenObjects,
-  setSelectedGreenObjects,
-  greenHint,
-  setGreenHint,
-  activityComplete,
-  completeActivity,
-  resetActivityState
-}: {
-  selectedGreenObjects: number[]
-  setSelectedGreenObjects: (objects: number[]) => void
-  greenHint: string | null
-  setGreenHint: (hint: string | null) => void
-  activityComplete: boolean
-  completeActivity: () => void
-  resetActivityState: () => void
-}) {
-  const toggleObject = (index: number) => {
-    if (activityComplete) return
-    
-    const obj = greenObjects[index]
-    
-    if (!obj.isGreen) {
-      setGreenHint('Try looking for something green.')
-      setTimeout(() => setGreenHint(null), 2000)
-      return
-    }
-    
-    if (selectedGreenObjects.includes(index)) {
-      setSelectedGreenObjects(selectedGreenObjects.filter(i => i !== index))
-    } else if (selectedGreenObjects.length < 3) {
-      const newSelected = [...selectedGreenObjects, index]
-      setSelectedGreenObjects(newSelected)
-      
-      if (newSelected.length === 3) {
-        setTimeout(completeActivity, 500)
-      }
-    }
-  }
-
-  return (
-    <Card className="max-w-2xl mx-auto">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Look for Green
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={resetActivityState}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <CardDescription>Select 3 green objects</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-          {greenObjects.map((obj, index) => (
-            <button
-              key={index}
-              onClick={() => toggleObject(index)}
-              className={`p-3 rounded-lg border-2 text-center transition-all text-sm ${
-                selectedGreenObjects.includes(index)
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border hover:border-primary/50'
-              }`}
-            >
-              {obj.name}
-            </button>
-          ))}
-        </div>
-
-        {greenHint && (
-          <p className="text-center text-sm text-amber-600 animate-grow">
-            {greenHint}
-          </p>
-        )}
-
-        <div className="flex justify-center gap-2">
-          {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className={`w-8 h-8 rounded-full border-2 ${
-                i < selectedGreenObjects.length
-                  ? 'border-primary bg-primary'
-                  : 'border-muted'
-              }`}
-            />
-          ))}
-        </div>
-
-        {activityComplete && (
-          <div className="text-center p-4 rounded-lg bg-primary/10">
-            <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-            <p className="font-medium text-primary">Great job finding green objects!</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function BodyScanActivity({
-  bodyScanStep,
-  setBodyScanStep,
-  activityComplete,
-  completeActivity,
-  resetActivityState
-}: {
-  bodyScanStep: number
-  setBodyScanStep: (step: number | ((s: number) => number)) => void
-  activityComplete: boolean
-  completeActivity: () => void
-  resetActivityState: () => void
-}) {
-  const steps = [
-    'Notice your head and face',
-    'Relax your shoulders',
-    'Notice your breathing',
-    'Relax your hands',
-    'Notice your legs and feet'
-  ]
-
-  const handleNext = () => {
-    if (bodyScanStep < steps.length - 1) {
-      setBodyScanStep((s: number) => s + 1)
-    }
-  }
-
-  return (
-    <Card className="max-w-lg mx-auto">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-primary" />
-            Body Scan
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={resetActivityState}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <CardDescription>Notice sensations in your body</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <Progress value={((bodyScanStep + 1) / steps.length) * 100} className="h-2" />
-
-        <div className="text-center py-8 px-4 rounded-xl bg-primary/5">
-          <p className="text-xl font-medium">{steps[bodyScanStep]}</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Step {bodyScanStep + 1} of {steps.length}
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          {bodyScanStep < steps.length - 1 ? (
-            <Button className="flex-1" onClick={handleNext}>
-              Next <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          ) : !activityComplete ? (
-            <Button className="flex-1" onClick={completeActivity}>
-              <CheckCircle2 className="mr-2 h-5 w-5" />
-              Complete
-            </Button>
-          ) : null}
-        </div>
-
-        {activityComplete && (
-          <div className="text-center p-4 rounded-lg bg-primary/10">
-            <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-            <p className="font-medium text-primary">You completed a body scan.</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function MuscleTensionActivity({
-  muscleTensionStep,
-  setMuscleTensionStep,
-  activityComplete,
-  completeActivity,
-  resetActivityState
-}: {
-  muscleTensionStep: number
-  setMuscleTensionStep: (step: number | ((s: number) => number)) => void
-  activityComplete: boolean
-  completeActivity: () => void
-  resetActivityState: () => void
-}) {
-  const steps = [
-    'Squeeze your hands for 3 seconds',
-    'Release',
-    'Raise your shoulders gently',
-    'Release',
-    'Press your feet into the floor',
-    'Release'
-  ]
-
-  const handleNext = () => {
-    if (muscleTensionStep < steps.length - 1) {
-      setMuscleTensionStep((s: number) => s + 1)
-    }
-  }
-
-  return (
-    <Card className="max-w-lg mx-auto">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Hand className="h-5 w-5 text-primary" />
-            Muscle Tension &amp; Release
-          </CardTitle>
-          <Button variant="ghost" size="sm" onClick={resetActivityState}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <CardDescription>Tense and release muscle groups</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <Progress value={((muscleTensionStep + 1) / steps.length) * 100} className="h-2" />
-
-        <div className={`text-center py-8 px-4 rounded-xl ${
-          steps[muscleTensionStep].includes('Release') ? 'bg-accent/20' : 'bg-primary/10'
-        }`}>
-          <p className="text-xl font-medium">{steps[muscleTensionStep]}</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Step {muscleTensionStep + 1} of {steps.length}
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          {muscleTensionStep < steps.length - 1 ? (
-            <Button className="flex-1" onClick={handleNext}>
-              Next <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          ) : !activityComplete ? (
-            <Button className="flex-1" onClick={completeActivity}>
-              <CheckCircle2 className="mr-2 h-5 w-5" />
-              Complete
-            </Button>
-          ) : null}
-        </div>
-
-        {activityComplete && (
-          <div className="text-center p-4 rounded-lg bg-primary/10">
-            <CheckCircle2 className="h-8 w-8 text-primary mx-auto mb-2" />
-            <p className="font-medium text-primary">You practiced releasing tension.</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   )
 }
